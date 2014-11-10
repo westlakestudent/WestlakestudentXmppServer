@@ -81,15 +81,15 @@ public class NotificationManager {
 			String remark) {
 		log.debug("sendBroadcast()...");
 		IQ notificationIQ = createNotificationIQ(apiKey, title, message, remark);
-		NotifyMessage recv_msg = new NotifyMessage();
-		recv_msg.setMessage(message);
-		recv_msg.setRemark(remark);
-		recv_msg.setTitle(title);
-
-		NotifyMessage unrecv_msg = new NotifyMessage();
-		unrecv_msg.setMessage(message);
-		unrecv_msg.setRemark(remark);
-		unrecv_msg.setTitle(title);
+//		NotifyMessage recv_msg = new NotifyMessage();
+//		recv_msg.setMessage(message);
+//		recv_msg.setRemark(remark);
+//		recv_msg.setTitle(title);
+//
+//		NotifyMessage unrecv_msg = new NotifyMessage();
+//		unrecv_msg.setMessage(message);
+//		unrecv_msg.setRemark(remark);
+//		unrecv_msg.setTitle(title);
 
 		StringBuffer recv_buf = new StringBuffer();
 		recv_buf.append(SENT + ":");
@@ -98,48 +98,14 @@ public class NotificationManager {
 		unrecv_buf.append(NOT_SEND + ":");
 
 		for (ClientSession session : sessionManager.getSessions()) {
-			String username;
-			String imei;
-			User user = null;
-			try {
-				username = session.getUsername();
-				user = userService.getUserByUsername(username);
-			} catch (NotFoundException e) {
-				log.error("没找到用户" + e);
-			}
-			if (session.getPresence().isAvailable()) {
-				notificationIQ.setTo(session.getAddress());
-
-				imei = user.getImei();
-				recv_buf.append(imei + ",");
-				user = null;
-				session.deliver(notificationIQ);
-
-			} else {
-				imei = user.getImei();
-				unrecv_buf.append(imei + ",");
-				user = null;
+			if (session != null) {
+				if (session.getPresence().isAvailable()) {
+					notificationIQ.setTo(session.getAddress());
+					session.deliver(notificationIQ);
+				}
 			}
 		}
 		
-//		for(ClientSession session : sessionManager.getClosedSessions()){
-//			try {
-//				String username = session.getUsername();
-//				User user = userService.getUserByUsername(username);
-//				String imei = user.getImei();
-//				unrecv_buf.append(imei + ",");
-//			} catch (NotFoundException e) {
-//				log.error("closed session 没找到用户" + e);
-//			}
-//			
-//		}
-		
-		try {
-			msgService.insert(recv_msg);
-			msgService.insert(unrecv_msg);
-		} catch (ExistsException e) {
-			log.equals("insert msg failed!");
-		}
 		
 	}
 

@@ -91,4 +91,8 @@ public class UserServiceImpl implements UserService {
 			throws NotFoundException {
 		return userDao.checkUserByUserName(username);
 	}
+
+	public void updateAuthed(User user,int auth) {
+		userDao.updateAuthed(user,auth);
+	}
 }

@@ -104,6 +104,7 @@ public class XmppServer {
      * Stops the server.
      */
     public void stop() {
+    	 log.info("XmppServer stopped: " + serverName);
         shutdownServer();
         Thread shutdownThread = new ShutdownThread();
         shutdownThread.setDaemon(true);

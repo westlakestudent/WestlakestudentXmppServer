@@ -23,6 +23,7 @@ import java.util.List;
 import org.androidpn.server.dao.UserDao;
 import org.androidpn.server.model.User;
 import org.androidpn.server.service.NotFoundException;
+import org.mortbay.log.Log;
 import org.springframework.orm.hibernate3.support.HibernateDaoSupport;
 
 /**
@@ -103,6 +104,13 @@ public class UserDaoHibernate extends HibernateDaoSupport implements UserDao {
 		}
 		return checked;
 		
+	}
+
+
+	public void updateAuthed(User user,int auth) {
+		user.setAuthed(auth);
+		getHibernateTemplate().update(user);
+		Log.debug("update auth " + auth + " ;username:" + user.getUsername());
 	}
 	
 }

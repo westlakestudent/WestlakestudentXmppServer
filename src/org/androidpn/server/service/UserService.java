@@ -44,5 +44,7 @@ public interface UserService {
     public boolean checkUserByImei(String imei) throws NotFoundException;
     
     public boolean checkUserByUserName(String username) throws NotFoundException;
+    
+    public void updateAuthed(User user,int auth);
 
 }

@@ -55,9 +55,6 @@ public class User implements Serializable {
     @Column(name = "email", length = 64)
     private String email;
 
-    @Column(name = "imei", length = 255)
-    private String imei;
-
     @Column(name = "created_date", updatable = false)
     private Date createdDate = new Date();
 
@@ -118,14 +115,6 @@ public class User implements Serializable {
     }
 
     
-    public String getImei() {
-		return imei;
-	}
-
-	public void setImei(String imei) {
-		this.imei = imei;
-	}
-
 	public Date getCreatedDate() {
         return createdDate;
     }

@@ -101,10 +101,7 @@ public class IQRegisterHandler extends IQHandler {
 					String username = query.elementText("username");
 					String password = query.elementText("password");
 					String email = query.elementText("email");
-					String imei = query.elementText("imei");
 
-					if (imei == null)
-						imei = "无imei";
 					// Verify the username
 					if (username != null) {
 						Stringprep.nodeprep(username);
@@ -124,21 +121,13 @@ public class IQRegisterHandler extends IQHandler {
 					}
 
 					User user = new User();
-//					if (session.getStatus() == Session.STATUS_AUTHENTICATED) {
-//						user = userService.getUser(session.getUsername());
-//					} else {
-//						user = new User();
-//					}
 					user.setUsername(username);
 					user.setPassword(password);
 					user.setEmail(email);
-					user.setImei(imei);
 					
 					reply = IQ.createResultIQ(packet);
-					if (!userService.checkUserByUserName(username)
-							&& !userService.checkUserByImei(imei)){
+					if (!userService.checkUserByUserName(username)){
 						userService.saveUser(user);
-						
 					}else{
 						reply.setError(PacketError.Condition.conflict);
 					}

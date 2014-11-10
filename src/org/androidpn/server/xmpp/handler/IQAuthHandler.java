@@ -20,6 +20,10 @@ package org.androidpn.server.xmpp.handler;
 import gnu.inet.encoding.Stringprep;
 import gnu.inet.encoding.StringprepException;
 
+import org.androidpn.server.model.User;
+import org.androidpn.server.service.NotFoundException;
+import org.androidpn.server.service.ServiceLocator;
+import org.androidpn.server.service.UserService;
 import org.androidpn.server.xmpp.UnauthenticatedException;
 import org.androidpn.server.xmpp.UnauthorizedException;
 import org.androidpn.server.xmpp.auth.AuthManager;
@@ -34,156 +38,183 @@ import org.xmpp.packet.IQ;
 import org.xmpp.packet.JID;
 import org.xmpp.packet.PacketError;
 
-/** 
+/**
  * This class is to handle the TYPE_IQ jabber:iq:auth protocol.
- *
+ * 
  * @author Sehwan Noh (devnoh@gmail.com)
  */
 public class IQAuthHandler extends IQHandler {
 
-    private static final String NAMESPACE = "jabber:iq:auth";
+	private static final String NAMESPACE = "jabber:iq:auth";
 
-    private Element probeResponse;
-    
-    private SessionManager sessionManager;
+	private Element probeResponse;
 
-    /**
-     * Constructor.
-     */
-    public IQAuthHandler() {
-    	sessionManager = SessionManager.getInstance();
-        probeResponse = DocumentHelper.createElement(QName.get("query",
-                NAMESPACE));
-        probeResponse.addElement("username");
-        if (AuthManager.isPlainSupported()) {
-            probeResponse.addElement("password");
-        }
-        if (AuthManager.isDigestSupported()) {
-            probeResponse.addElement("digest");
-        }
-        probeResponse.addElement("resource");
-    }
+	private SessionManager sessionManager;
 
-    /**
-     * Handles the received IQ packet.
-     * 
-     * @param packet the packet
-     * @return the response to send back
-     * @throws UnauthorizedException if the user is not authorized
-     */
-    public IQ handleIQ(IQ packet) throws UnauthorizedException {
-        IQ reply = null;
+	private UserService userService = null;
 
-        ClientSession session = sessionManager.getSession(packet.getFrom());
-        if (session == null) {
-            log.error("Session not found for key " + packet.getFrom());
-            reply = IQ.createResultIQ(packet);
-            reply.setChildElement(packet.getChildElement().createCopy());
-            reply.setError(PacketError.Condition.internal_server_error);
-            return reply;
-        }
+	/**
+	 * Constructor.
+	 */
+	public IQAuthHandler() {
+		sessionManager = SessionManager.getInstance();
+		probeResponse = DocumentHelper.createElement(QName.get("query",
+				NAMESPACE));
+		probeResponse.addElement("username");
+		if (AuthManager.isPlainSupported()) {
+			probeResponse.addElement("password");
+		}
+		if (AuthManager.isDigestSupported()) {
+			probeResponse.addElement("digest");
+		}
+		probeResponse.addElement("resource");
 
-        try {
-            Element iq = packet.getElement();
-            Element query = iq.element("query");
-            Element queryResponse = probeResponse.createCopy();
+		userService = ServiceLocator.getUserService();
+	}
 
-            if (IQ.Type.get == packet.getType()) { // get query请求登录
-                String username = query.elementText("username");
-                if (username != null) {
-                    queryResponse.element("username").setText(username);
-                }
-                reply = IQ.createResultIQ(packet);
-                reply.setChildElement(queryResponse);
-                if (session.getStatus() != Session.STATUS_AUTHENTICATED) {
-                    reply.setTo((JID) null);
-                }
-            } else { // set query登录
-                String resource = query.elementText("resource");
-                String username = query.elementText("username");
-                String password = query.elementText("password");
-                String digest = null;
-                if (query.element("digest") != null) {
-                    digest = query.elementText("digest").toLowerCase();
-                }
+	/**
+	 * Handles the received IQ packet.
+	 * 
+	 * @param packet
+	 *            the packet
+	 * @return the response to send back
+	 * @throws UnauthorizedException
+	 *             if the user is not authorized
+	 */
+	public IQ handleIQ(IQ packet) throws UnauthorizedException {
+		IQ reply = null;
 
-                // Verify the resource
-                if (resource != null) {
-                    try {
-                        resource = JID.resourceprep(resource);
-                    } catch (StringprepException e) {
-                        throw new UnauthorizedException("Invalid resource: "
-                                + resource, e);
-                    }
-                } else {
-                    throw new IllegalArgumentException(
-                            "Invalid resource (empty or null).");
-                }
+		ClientSession session = sessionManager.getSession(packet.getFrom());
+		if (session == null) {
+			log.error("Session not found for key " + packet.getFrom());
+			reply = IQ.createResultIQ(packet);
+			reply.setChildElement(packet.getChildElement().createCopy());
+			reply.setError(PacketError.Condition.internal_server_error);
+			return reply;
+		}
 
-                // Verify the username
-                if (username == null || username.trim().length() == 0) {
-                    throw new UnauthorizedException(
-                            "Invalid username (empty or null).");
-                }
-                try {
-                    Stringprep.nodeprep(username);
-                } catch (StringprepException e) {
-                    throw new UnauthorizedException("Invalid username: "
-                            + username, e);
-                }
-                username = username.toLowerCase();
+		try {
+			Element iq = packet.getElement();
+			Element query = iq.element("query");
+			Element queryResponse = probeResponse.createCopy();
 
-                // Verify that username and password are correct
-                AuthToken token = null;
-                if (password != null && AuthManager.isPlainSupported()) {
-                    token = AuthManager.authenticate(username, password);
-                } else if (digest != null && AuthManager.isDigestSupported()) {
-                    token = AuthManager.authenticate(username, session
-                            .getStreamID().toString(), digest);
-                }
+			if (IQ.Type.get == packet.getType()) { // get query请求登录
+				String username = query.elementText("username");
+				if (username != null) {
+					queryResponse.element("username").setText(username);
+				}
+				reply = IQ.createResultIQ(packet);
+				User user = userService.getUserByUsername(username);
 
-                if (token == null) {
-                    throw new UnauthenticatedException();
-                }
+				if (user.getAuthed() == 1) {
+					reply.setError(PacketError.Condition.not_allowed);// 此username已经登录
+					session.process(reply);
+					session.close();
+					return null;
+				}
+				reply.setChildElement(queryResponse);
+				if (session.getStatus() != Session.STATUS_AUTHENTICATED) {
+					reply.setTo((JID) null);
+				}
+			} else { // set query登录
+				String resource = query.elementText("resource");
+				String username = query.elementText("username");
+				String password = query.elementText("password");
+				log.info("resource:" + resource + " ;username:" + username
+						+ " ;password:" + password);
+				String digest = null;
+				if (query.element("digest") != null) {
+					digest = query.elementText("digest").toLowerCase();
+				}
 
-                // Set the session authenticated successfully相当于手机登陆成功
-                
-                packet.setFrom(session.getAddress());
-                reply = IQ.createResultIQ(packet);
-                ClientSession online = sessionManager.getSession(username);
-                if(online != null)
-                	reply.setError(PacketError.Condition.not_allowed);//此username已经登录
-                session.setAuthToken(token, resource);
-            }
-        } catch (Exception ex) {
-            log.error(ex);
-            reply = IQ.createResultIQ(packet);
-            reply.setChildElement(packet.getChildElement().createCopy());
-            if (ex instanceof IllegalArgumentException) {
-                reply.setError(PacketError.Condition.not_acceptable);
-            } else if (ex instanceof UnauthorizedException) {
-                reply.setError(PacketError.Condition.not_authorized);
-            } else if (ex instanceof UnauthenticatedException) {
-                reply.setError(PacketError.Condition.not_authorized);
-            } else {
-                reply.setError(PacketError.Condition.internal_server_error);
-            }
-        }
+				// Verify the resource
+				if (resource != null) {
+					try {
+						resource = JID.resourceprep(resource);
+					} catch (StringprepException e) {
+						session.close();
+						throw new UnauthorizedException("Invalid resource: "
+								+ resource, e);
+					}
+				} else {
+					session.close();
+					throw new IllegalArgumentException(
+							"Invalid resource (empty or null).");
 
-        // Send the response directly to the session
-        if (reply != null) {
-            session.process(reply);
-        }
-        return null;
-    }
+				}
 
-    /**
-     * Returns the namespace of the handler.
-     * 
-     * @return the namespace
-     */
-    public String getNamespace() {
-        return NAMESPACE;
-    }
+				// Verify the username
+				if (username == null || username.trim().length() == 0) {
+					session.close();
+					throw new UnauthorizedException(
+							"Invalid username (empty or null).");
+				}
+				try {
+					Stringprep.nodeprep(username);
+				} catch (StringprepException e) {
+					session.close();
+					throw new UnauthorizedException("Invalid username: "
+							+ username, e);
+				}
+				username = username.toLowerCase();
+
+				// Verify that username and password are correct
+				AuthToken token = null;
+				if (password != null && AuthManager.isPlainSupported()) {
+					token = AuthManager.authenticate(username, password);
+				} else if (digest != null && AuthManager.isDigestSupported()) {
+					token = AuthManager.authenticate(username, session
+							.getStreamID().toString(), digest);
+				}
+
+				reply = IQ.createResultIQ(packet);
+				if (token == null) {
+					reply.setError(PacketError.Condition.forbidden);
+					session.process(reply);
+					session.close();
+					return null;
+				}
+
+				// Set the session authenticated successfully相当于手机登陆成功
+
+				packet.setFrom(session.getAddress());
+
+				session.setAuthToken(token, resource);
+			}
+		} catch (Exception ex) {
+			log.error(ex);
+			reply = IQ.createResultIQ(packet);
+			reply.setChildElement(packet.getChildElement().createCopy());
+			if (ex instanceof IllegalArgumentException) {
+				reply.setError(PacketError.Condition.not_acceptable);
+			} else if (ex instanceof UnauthorizedException) {
+				reply.setError(PacketError.Condition.not_authorized);
+			} else if (ex instanceof UnauthenticatedException) {
+				reply.setError(PacketError.Condition.not_authorized);
+			} else if (ex instanceof NotFoundException) {
+				reply.setError(PacketError.Condition.registration_required);// 账号错误
+			} else {
+				reply.setError(PacketError.Condition.internal_server_error);
+			}
+			session.process(reply);
+			session.close();
+			return null;
+		}
+
+		// Send the response directly to the session
+		if (reply != null) {
+			session.process(reply);
+		}
+		return null;
+	}
+
+	/**
+	 * Returns the namespace of the handler.
+	 * 
+	 * @return the namespace
+	 */
+	public String getNamespace() {
+		return NAMESPACE;
+	}
 
 }

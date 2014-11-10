@@ -26,7 +26,6 @@
 			--%>
 			<th>Online</th>
 			<th>Username</th>
-			<th>Imei</th>
 			<th>Email</th>
 			<th>Created</th>
 		</tr>
@@ -45,7 +44,6 @@
 				</c:choose>
 				</td>
 				<td><c:out value="${user.username}" /></td>
-				<td><c:out value="${user.imei}" /></td>
 				<td><c:out value="${user.email}" /></td>
 				<td align="center"><fmt:formatDate pattern="yyyy-MM-dd HH:mm:ss" value="${user.createdDate}" /></td>
 			</tr>

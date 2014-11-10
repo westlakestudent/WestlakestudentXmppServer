@@ -125,7 +125,7 @@ public class AuthManager {
             String password = getPassword(username);
             String anticipatedDigest = createDigest(token, password);
             if (!digest.equalsIgnoreCase(anticipatedDigest)) {
-                throw new UnauthenticatedException();
+                return null;
             }
         } catch (NotFoundException unfe) {
             throw new UnauthenticatedException();
